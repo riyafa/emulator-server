@@ -15,8 +15,11 @@ public class BackEndServer {
     }
 
     private static HttpServerOperationBuilderContext startHttpEmulator() {
-        return Emulator.getHttpEmulator().server().given(configure().host("10.100.8.3").port(6065).context("/users").
-                withEnableWireLog())
+        return Emulator.getHttpEmulator().server()
+                .given(
+                        configure().host("10.100.8.3").port(6065).context("/users").withLogicDelay(3000)
+                                .withEnableWireLog()
+                )
 
                 .when(
                         request().withMethod(HttpMethod.POST).withPath("/user1")
