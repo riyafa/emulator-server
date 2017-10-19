@@ -1,5 +1,6 @@
 package org.apache.synapse.integration;
 
+import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
@@ -26,6 +27,10 @@ public class BackEndServer {
         startHttpEmulatorSlowResponse();
         startHttpEmulatorLargePayload();
         startHttpEmulatorWithReadingDelay();
+        startHttpEmulatorRandomDrop();
+        startHttpEmulator();
+        startHttpEmulatorMissingHeader();
+        startHttpInvalidSpec();
     }
 
     private static HttpServerOperationBuilderContext startHttpEmulatorLargePayload() throws IOException {
@@ -72,7 +77,7 @@ public class BackEndServer {
                         request().withMethod(HttpMethod.POST).withPath("/delay")
                 )
                 .then(
-                        response().withBody("Slowly reading backend ").withStatusCode(HttpResponseStatus.OK)
+                        response().withBody("Slowly reading backend").withStatusCode(HttpResponseStatus.OK)
                 )
 
                 .operation().start();
@@ -89,7 +94,7 @@ public class BackEndServer {
                         request().withMethod(HttpMethod.POST).withPath("/alive")
                 )
                 .then(
-                        response().withBody("Keep alive ").withStatusCode(HttpResponseStatus.OK)
+                        response().withBody("Keep alive").withStatusCode(HttpResponseStatus.OK)
                 )
 
                 .operation().start();
@@ -123,7 +128,7 @@ public class BackEndServer {
                         request().withMethod(HttpMethod.POST).withPath("/writer")
                 )
                 .then(
-                        response().withBody("HTTP version 1.0 only\n").withStatusCode(HttpResponseStatus.OK)
+                        response().withBody("Slowly writing backend").withStatusCode(HttpResponseStatus.OK)
                 )
 
                 .operation().start();
@@ -190,17 +195,18 @@ public class BackEndServer {
                         request().withMethod(HttpMethod.POST).withPath("/payload")
                 )
                 .then(
-                        response().withBody("Malformed JSON payload").withStatusCode(HttpResponseStatus.OK).withBody(
-                                "{\"glossary\":{\"title\":\"exampleglossary\",\"GlossDiv\":{\"title\":\"S\"," +
-                                        "\"GlossList\":{\"GlossEntry\":{\"ID\":\"SGML\",\"SortAs\":\"SGML\"," +
-                                        "\"GlossTerm\":\"StandardGeneralizedMarkupLanguage\",\"Acronym\":\"SGML\"," +
-                                        "\"Abbrev\":\"ISO8879:1986\",\"GlossDef\":{\"para\":\"Ameta-markuplanguage," +
-                                        "usedtocreatemarkuplanguagessuchasDocBook.\",\"GlossSeeAlso\":[\"GML\"," +
-                                        "\"XML\"],\"GlossSee\":\"markup\"}}}}}")
-                                .withHeader("Content-Type", "application/json").withHeader("wso2", "123")
+                        response().withBody("Malformed XML payload").withStatusCode(HttpResponseStatus.OK).withBody(
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
+                                        "<note>\n" +
+                                        "  <to>Tove<to>\n" +
+                                        "  <from>Jani</from>\n" +
+                                        "  <heading>Reminder</heading>\n" +
+                                        "  <body>Don't forget me this weekend!</body>\n" +
+                                        "</note>")
+                                .withHeader("Content-Type", "application/xml").withHeader("wso2", "123")
                 )
-
-                .operation().start();
+                .operation()
+                .start();
     }
 
     private static HttpServerOperationBuilderContext startHttpEmulatorCopyHeaders() {
@@ -244,9 +250,74 @@ public class BackEndServer {
                                         "\"Abbrev\":\"ISO8879:1986\",\"GlossDef\":{\"para\":\"Ameta-markuplanguage," +
                                         "usedtocreatemarkuplanguagessuchasDocBook.\",\"GlossSeeAlso\":[\"GML\"," +
                                         "\"XML\"]},\"GlossSee\":\"markup\"}}}}}")
-                                .withHeader("Content-Type", "application/json").withCopyHeader("wso2")
+                                .withHeader("Content-Type", "application/json")
+                )
+
+                .operation().start();
+    }
+
+    private static HttpServerOperationBuilderContext startHttpEmulator() {
+        return Emulator.getHttpEmulator().server()
+                .given(
+                        configure().host("10.100.8.3").port(6077).context("/normal").withEnableWireLog()
+                )
+
+                .when(
+                        request().withMethod(HttpMethod.POST).withPath("/server")
+                )
+                .then(
+                        response().withBody("Malformed JSON payload").withStatusCode(HttpResponseStatus.OK).withBody(
+                                "{\"glossary\":{\"title\":\"exampleglossary\",\"GlossDiv\":{\"title\":\"S\"," +
+                                        "\"GlossList\":{\"GlossEntry\":{\"ID\":\"SGML\",\"SortAs\":\"SGML\"," +
+                                        "\"GlossTerm\":\"StandardGeneralizedMarkupLanguage\",\"Acronym\":\"SGML\"," +
+                                        "\"Abbrev\":\"ISO8879:1986\",\"GlossDef\":{\"para\":\"Ameta-markuplanguage," +
+                                        "usedtocreatemarkuplanguagessuchasDocBook.\",\"GlossSeeAlso\":[\"GML\"," +
+                                        "\"XML\"]},\"GlossSee\":\"markup\"}}}}}")
+                                .withHeader("Content-Type", "application/json")
+                )
+
+                .operation().start();
+    }
+
+    private static HttpServerOperationBuilderContext startHttpEmulatorMissingHeader() {
+        return Emulator.getHttpEmulator().server()
+                .given(
+                        configure().host("10.100.8.3").port(6078).context("/missing").withEnableWireLog()
+                )
+
+                .when(
+                        request().withMethod(HttpMethod.POST).withPath("/header")
+                )
+                .then(
+                        response().withStatusCode(HttpResponseStatus.OK).withBody(
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
+                                        "<note>\n" +
+                                        "  <to>Tove</to>\n" +
+                                        "  <from>Jani</from>\n" +
+                                        "  <heading>Reminder</heading>\n" +
+                                        "  <body>Don't forget me this weekend!</body>\n" +
+                                        "</note>")
+                )
+
+                .operation().start();
+    }
+
+    private static HttpServerOperationBuilderContext startHttpInvalidSpec() {
+        return Emulator.getHttpEmulator().server()
+                .given(
+                        configure().host("10.100.8.3").port(6079).context("/invalid").withEnableWireLog()
+                )
+
+                .when(
+                        request().withMethod(HttpMethod.POST).withPath("/spec")
+                )
+                .then(
+                        response().withStatusCode(HttpResponseStatus.OK).withBody(
+                                "This is a plain body while the content type header says application/xml")
+                                .withHeader(HttpHeaders.Names.CONTENT_TYPE, "application/xml")
                 )
 
                 .operation().start();
     }
 }
+
